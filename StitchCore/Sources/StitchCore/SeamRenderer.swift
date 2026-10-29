@@ -75,36 +75,44 @@ public struct SeamRenderer {
             space: cs, bitmapInfo: CGImageAlphaInfo.none.rawValue
         ) else { return nil }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let stride = ctx.bytesPerRow
         guard let data = ctx.data else { return nil }
-        let bytes = UnsafePointer<UInt8>(data.bindMemory(to: UInt8.self, capacity: w * h))
-        return (ctx: ctx, bytes: bytes, stride: w)
+        // capacity 用真实 stride*h；ctx 必须与 bytes 同生命周期（调用方用 withExtendedLifetime 持有）
+        let bytes = UnsafePointer<UInt8>(data.bindMemory(to: UInt8.self, capacity: stride * h))
+        return (ctx: ctx, bytes: bytes, stride: stride)
     }
 
     /// 每行均值（0~1，灰度归一化），长度 = 高度
     private func rowMeans(_ image: CGImage) -> [CGFloat] {
-        guard let (_, bytes, stride) = grayContext(image) else { return [] }
-        let h = image.height, w = image.width
-        var out = [CGFloat](repeating: 0, count: h)
-        for y in 0..<h {
-            var sum: UInt64 = 0
-            let base = y * stride
-            for x in 0..<w { sum += UInt64(bytes[base + x]) }
-            out[y] = CGFloat(sum) / CGFloat(w) / 255.0
+        guard let gc = grayContext(image) else { return [] }
+        return withExtendedLifetime(gc) {
+            let bytes = gc.bytes, stride = gc.stride
+            let h = image.height, w = image.width
+            var out = [CGFloat](repeating: 0, count: h)
+            for y in 0..<h {
+                var sum: UInt64 = 0
+                let base = y * stride
+                for x in 0..<w { sum += UInt64(bytes[base + x]) }
+                out[y] = CGFloat(sum) / CGFloat(w) / 255.0
+            }
+            return out
         }
-        return out
     }
 
     /// 每列均值（0~1），长度 = 宽度
     private func colMeans(_ image: CGImage) -> [CGFloat] {
-        guard let (_, bytes, stride) = grayContext(image) else { return [] }
-        let h = image.height, w = image.width
-        var out = [CGFloat](repeating: 0, count: w)
-        for x in 0..<w {
-            var sum: UInt64 = 0
-            for y in 0..<h { sum += UInt64(bytes[y * stride + x]) }
-            out[x] = CGFloat(sum) / CGFloat(h) / 255.0
+        guard let gc = grayContext(image) else { return [] }
+        return withExtendedLifetime(gc) {
+            let bytes = gc.bytes, stride = gc.stride
+            let h = image.height, w = image.width
+            var out = [CGFloat](repeating: 0, count: w)
+            for x in 0..<w {
+                var sum: UInt64 = 0
+                for y in 0..<h { sum += UInt64(bytes[y * stride + x]) }
+                out[x] = CGFloat(sum) / CGFloat(h) / 255.0
+            }
+            return out
         }
-        return out
     }
 
     /// 从数组头部起，连续满足「与首值差 <= tol」的长度（封顶 maxLen）

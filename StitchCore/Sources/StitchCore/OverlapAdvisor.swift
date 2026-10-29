@@ -102,16 +102,19 @@ public struct OverlapAdvisor: Sendable {
             space: cs, bitmapInfo: CGImageAlphaInfo.none.rawValue
         ) else { return [] }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        guard let data = ctx.data else { return [] }
-        let bytes = data.bindMemory(to: UInt8.self, capacity: w * h)
-        var out = [CGFloat](repeating: 0, count: h)
-        for y in 0..<h {
-            var sum: UInt64 = 0
-            let base = y * w
-            for x in 0..<w { sum += UInt64(bytes[base + x]) }
-            out[y] = CGFloat(sum) / CGFloat(w) / 255.0
+        let stride = ctx.bytesPerRow
+        return withExtendedLifetime(ctx) {
+            guard let data = ctx.data else { return [] }
+            let bytes = data.bindMemory(to: UInt8.self, capacity: stride * h)
+            var out = [CGFloat](repeating: 0, count: h)
+            for y in 0..<h {
+                var sum: UInt64 = 0
+                let base = y * stride
+                for x in 0..<w { sum += UInt64(bytes[base + x]) }
+                out[y] = CGFloat(sum) / CGFloat(w) / 255.0
+            }
+            return out
         }
-        return out
     }
 
     private func resample(_ arr: [CGFloat], to n: Int) -> [CGFloat] {
