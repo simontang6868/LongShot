@@ -1,0 +1,18 @@
+# Swift / SPM
+.build/
+Packages/
+Package.pins
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# 本地生成（CI 也会重新生成）
+test-output.log
+artifact-summary.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 密钥/本地覆盖
+*.local
