@@ -15,7 +15,7 @@ import Foundation
 // ===========================================================================
 
 /// 一张可绘制的画布抽象（包裹 CGContext，向编排层隐藏 CG 细节）。
-public protocol BackendCanvas: Sendable {
+public protocol BackendCanvas {
     var width: Int { get }
     var height: Int { get }
     /// 在 (x, y) 处绘制整张图（尺寸以图自身为准）。
@@ -26,7 +26,7 @@ public protocol BackendCanvas: Sendable {
 
 /// 拼接后端协议：把「建画布 / 缩放 / 编码」三类 CG 能力抽象出来。
 /// StreamingComposer 只认这个协议，不认任何 CoreGraphics 具体类型。
-public protocol StitchBackend: Sendable {
+public protocol StitchBackend {
     /// 创建一块填充了底色的可绘制画布。
     func makeCanvas(width: Int, height: Int, fill: CGColor) -> BackendCanvas?
     /// 等比缩放到指定宽高（混宽归一用）。

@@ -196,7 +196,7 @@ final class StreamingComposerTests: XCTestCase {
 
 /// 隔离探针：包裹 CGBackend，记录 StreamingComposer 是否真的把 CG 绘制/编码委托出来。
 /// 它的存在本身就是「CGBackend 协议隔离」的可测试证据 —— 编排层接收的是协议，不是 CG。
-private struct SpyBackend: StitchBackend {
+private final class SpyBackend: StitchBackend {
     let inner = CGBackend()
     var makeCanvasCalls = 0
     var encodeCalls = 0
