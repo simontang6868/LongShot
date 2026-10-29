@@ -8,6 +8,9 @@ enum TestImages {
         let ctx = CGContext(data: nil, width: width, height: height,
                             bitsPerComponent: 8, bytesPerRow: 0, space: cs,
                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        // 翻转坐标系：绘制 y=0 落在图像顶部，与 rowMeans 读取「内存首行=顶部」一致
+        ctx.translateBy(x: 0, y: CGFloat(height))
+        ctx.scaleBy(x: 1, y: -1)
         draw(ctx, width, height)
         return ctx.makeImage()!
     }
@@ -25,7 +28,9 @@ enum TestImages {
     static func content(width: Int, height: Int, phase: Double = 0, freq: Double = 0.2) -> CGImage {
         make(width: width, height: height) { ctx, w, h in
             for y in 0..<h {
-                let v = 0.5 + 0.5 * sin((Double(y) + phase) * freq)
+                // chirp（频率随行变化、非周期），避免正弦周期性造成重叠匹配混叠
+                let t = Double(y) + phase
+                let v = 0.5 + 0.5 * sin(t * freq + 0.002 * t * t)
                 let c = UInt8(clamp01(v) * 255)
                 ctx.setFillColor(CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(),
                                          components: [CGFloat(c)/255, CGFloat(c)/255, CGFloat(c)/255, 1])!)

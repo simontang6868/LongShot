@@ -21,6 +21,8 @@ public struct SeamRenderer {
     public static let edgeTolerance: CGFloat = 0.05
     /// 单条边最多裁这么多 pt
     public static let maxEdgeInset: CGFloat = 24
+    /// 视为「纯色带」的最小连续行/列数（不足则不算带，避免 1~2 行噪声误裁）
+    public static let minBandLength = 3
 
     public init() {}
 
@@ -115,24 +117,26 @@ public struct SeamRenderer {
         }
     }
 
-    /// 从数组头部起，连续满足「与首值差 <= tol」的长度（封顶 maxLen）
+    /// 从数组头部起，连续满足「与首值差 <= tol」的长度（封顶 maxLen）；不足 minBand 视为无带（返回 0）
     private func uniformPrefix(_ arr: [CGFloat], tol: CGFloat, maxLen: Int) -> Int {
         guard let first = arr.first else { return 0 }
         var len = 0
         for i in 0..<min(arr.count, maxLen) {
             if abs(arr[i] - first) <= tol { len = i + 1 } else { break }
         }
-        return len
+        return len >= Self.minBandLength ? len : 0
     }
 
-    /// 从数组尾部起，连续满足「与尾值差 <= tol」的长度（封顶 maxLen）
+    /// 从数组尾部起，连续满足「与尾值差 <= tol」的长度（封顶 maxLen）；不足 minBand 视为无带（返回 0）
     private func uniformSuffix(_ arr: [CGFloat], tol: CGFloat, maxLen: Int) -> Int {
         guard let last = arr.last else { return 0 }
         var len = 0
-        for i in (0..<min(arr.count, maxLen)).reversed() {
-            if abs(arr[i] - last) <= tol { len = (arr.count - i) } else { break }
+        let start = max(0, arr.count - maxLen)
+        var i = arr.count - 1
+        while i >= start {
+            if abs(arr[i] - last) <= tol { len += 1; i -= 1 } else { break }
         }
-        return len
+        return len >= Self.minBandLength ? len : 0
     }
 
     // MARK: - 状态栏 / 导航栏带检测（可选项，默认开）
