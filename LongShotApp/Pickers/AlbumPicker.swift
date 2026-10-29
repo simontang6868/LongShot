@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Tab B：相册选图拼。多选（顺序即拼接顺序），选中后进入同一个编辑页。
 /// 与 Tab A 共用 PHPickerWrapper：不申请完整相册权限，只拿副本。

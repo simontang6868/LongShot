@@ -1,6 +1,8 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import StitchCore
+import UIKit
 import UniformTypeIdentifiers
 
 /// 导入来源：Tab A 连续截图 / Tab B 相册选图

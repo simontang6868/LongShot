@@ -1,6 +1,7 @@
 import CoreGraphics
 import SwiftUI
 import StitchCore
+import UIKit
 
 /// 拼接编辑页：缩略条拖拽调序/删除、顶部/底部重叠量滑块、智能推荐、实时预览、导出。
 struct EditorView: View {
@@ -16,6 +17,9 @@ struct EditorView: View {
     @State private var showResult = false
     @State private var exportResult: ExportBundle?
 
+    /// 必须标 @MainActor：init 里要构造 StitchViewModel 并读写 SettingsStore，
+    /// 两者都是 @MainActor 隔离的；View 的合成 init 默认是 nonisolated，会直接编译报错。
+    @MainActor
     init(mode: ImportMode, images: [UIImage]) {
         self.mode = mode
         self.images = images
@@ -51,7 +55,7 @@ struct EditorView: View {
         .navigationTitle("编辑拼接")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { EditButton() }
+            ToolbarItem(placement: .navigationBarTrailing) { EditButton() }
         }
         .environment(\.editMode, $editMode)
         .overlay(alignment: .bottom) {
@@ -66,7 +70,7 @@ struct EditorView: View {
                 ResultView(bundle: bundle)
             }
         }
-        .task {
+        .task { @MainActor in
             vm.runAdvisorChecks()
         }
     }

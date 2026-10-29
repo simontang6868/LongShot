@@ -1,0 +1,67 @@
+# XcodeGen 工程描述（纯文本，Windows 上也能改，不需要 Xcode）
+#
+# 为什么用 XcodeGen 而不是提交 .xcodeproj：
+#   1. project.pbxproj 是二进制式的 UUID 迷宫，手写必出错，且 .gitignore 里本来就忽略了 *.xcodeproj
+#   2. 这份 yml 是唯一真相，CI 上一句 `xcodegen generate` 就能复现同一个工程
+#   3. 交接人手上没有 Mac，工程文件不可人工检查；yml 可以
+#
+# CI 用法（见 .github/workflows/ipa.yml）：
+#   xcodegen generate --spec project.yml
+#   xcodebuild -project LongShotApp.xcodeproj -scheme LongShotApp -sdk iphoneos ...
+
+name: LongShotApp
+
+options:
+  bundleIdPrefix: com.simontang
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  # 本地 SPM 包，零外部依赖、零网络。CI 上不需要 resolve 任何远端仓库。
+  StitchCore:
+    path: StitchCore
+
+targets:
+  LongShotApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: LongShotApp
+        excludes:
+          - "Info.plist"
+    dependencies:
+      - package: StitchCore
+        product: StitchCore
+    settings:
+      base:
+        # 部署目标红线：iOS 16.0（见 PRD）
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        TARGETED_DEVICE_FAMILY: "1"        # 只做 iPhone，系统截图路径
+        SWIFT_VERSION: "5.0"               # Swift 5 语言模式（非 6），避免严格并发误报
+        SWIFT_STRICT_CONCURRENCY: minimal  # 与上面配套：只警告，不阻断 iOS 16 老写法
+        INFOPLIST_FILE: LongShotApp/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.simontang.longshot
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_EMIT_LOC_STRINGS: NO
+        # 默认全关签名：先在 CI 上产出未签名 .app，签名的活留给爱思助手现场做。
+        # 若将来要真机直连调试，把这四行改成你的 Team + 证书即可。
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        DEVELOPMENT_TEAM: ""
+
+schemes:
+  LongShotApp:
+    build:
+      targets:
+        LongShotApp: all
+    run:
+      config: Release
+    archive:
+      config: Release

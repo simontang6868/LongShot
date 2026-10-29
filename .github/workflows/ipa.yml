@@ -1,0 +1,107 @@
+name: IPA
+
+# 目的单一：在云 macOS runner 上产出一个「未签名 .ipa」，供国区侧载（爱思助手现场签名）。
+# 不碰 test job —— 已绿的 ci.yml 保持原样，两个工作流互不干扰。
+#
+# 为什么是未签名：
+#   runner 上没有你的开发者证书，任何 ad-hoc / development 导出都必然失败。
+#   而爱思助手的「签名安装」本来就要用你的 Apple ID 现场签一次，
+#   所以我们只负责把 arm64 设备版 .app 打成一个结构合法的 ipa（Payload/LongShotApp.app）。
+#
+# 触发：① 手动 Run workflow；② push 到 main 且改到了 App / Core / project.yml
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "LongShotApp/**"
+      - "StitchCore/**"
+      - "project.yml"
+      - ".github/workflows/ipa.yml"
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    name: Build unsigned ipa (device arm64)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcode-select -p
+          swift --version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build (unsigned, iphoneos)
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project LongShotApp.xcodeproj \
+            -scheme LongShotApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log
+
+      - name: Package Payload -> ipa
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build/DerivedData/Build/Products/Release-iphoneos/LongShotApp.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::没有产出 .app，列出 build 目录排查"
+            find build -maxdepth 7 -name "*.app" -print || true
+            exit 1
+          fi
+          echo "--- .app 内容 ---"
+          ls -la "$APP"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist" || true
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$APP/Info.plist" || true
+          echo "--- 二进制架构 ---"
+          lipo -info "$APP/LongShotApp" || true
+
+          rm -rf build/Payload
+          mkdir -p build/Payload
+          cp -R "$APP" build/Payload/
+          cd build
+          /usr/bin/zip -qry LongShot-unsigned.ipa Payload
+          echo "--- ipa ---"
+          ls -lh LongShot-unsigned.ipa
+          /usr/bin/unzip -l LongShot-unsigned.ipa | head -n 20
+
+      - name: Upload ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: longshot-unsigned-ipa
+          path: build/LongShot-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-build-log
+          path: build.log
+          if-no-files-found: warn

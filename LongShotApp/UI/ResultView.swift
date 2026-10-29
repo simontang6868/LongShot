@@ -1,5 +1,6 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -14,6 +15,10 @@ struct ResultView: View {
     @State private var slices: [UIImage] = []
     @State private var isSaving = false
     @State private var status: String?
+    /// 本地镜像导出格式。
+    /// 不能直接写 `.onChange(of: settings.exportFormat)`：OutputFormat 带关联值且未声明 Equatable，
+    /// 不满足 onChange 要求的 Equatable 约束，会编译失败。改为监听这个 Hashable 的桥接类型。
+    @State private var formatSel: ExportFormatRepresentable = .png
 
     var body: some View {
         NavigationStack {
@@ -35,7 +40,7 @@ struct ResultView: View {
                 }
 
                 Form {
-                    Picker("导出格式", selection: formatBinding) {
+                    Picker("导出格式", selection: $formatSel) {
                         Text("PNG（文字锐利）").tag(ExportFormatRepresentable.png)
                         Text("JPEG").tag(ExportFormatRepresentable.jpeg)
                         Text("HEIC").tag(ExportFormatRepresentable.heic)
@@ -63,10 +68,15 @@ struct ResultView: View {
             .navigationTitle("导出")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } }
+                ToolbarItem(placement: .navigationBarTrailing) { Button("完成") { dismiss() } }
             }
-            .task { rebuildSlices() }
-            .onChange(of: settings.exportFormat) { _ in rebuildSlices() }
+            .task { @MainActor in
+                formatSel = ExportFormatRepresentable(settings.exportFormat)
+                rebuildSlices()
+            }
+            .onChange(of: formatSel) { new in
+                settings.exportFormat = new.format
+            }
             .onChange(of: blurRects) { _ in rebuildSlices() }
         }
     }
@@ -116,7 +126,9 @@ struct ResultView: View {
 
     private var shareItems: [URL] {
         bundle.slicesData.compactMap { data -> URL? in
-            let ext = settings.exportFormat == .pdf ? "pdf" : "png"
+            // OutputFormat 未声明 Equatable，不能用 == .pdf，改用模式匹配
+            let ext: String
+            if case .pdf = settings.exportFormat { ext = "pdf" } else { ext = "png" }
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension(ext)
@@ -125,15 +137,10 @@ struct ResultView: View {
         }
     }
 
-    // MARK: 格式绑定（ExportFormat 非 Hashable，用可 Hash 的 Representable 桥接）
-    private var formatBinding: Binding<ExportFormatRepresentable> {
-        Binding(get: { ExportFormatRepresentable(settings.exportFormat) },
-                set: { settings.exportFormat = $0.format })
-    }
-
     // 打码：在归一化矩形区域做高斯模糊后贴回
     private func blurRegions(in cg: CGImage, normalized rects: [CGRect], ciCtx: CIContext) -> CGImage {
-        guard let baseCI = CIImage(cgImage: cg) else { return cg }
+        // CIImage(cgImage:) 是非可选构造器，不能写 guard let
+        let baseCI = CIImage(cgImage: cg)
         guard let ctx = CGContext(data: nil, width: cg.width, height: cg.height,
                                   bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),

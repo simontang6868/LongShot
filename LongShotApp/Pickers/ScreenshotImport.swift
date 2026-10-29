@@ -129,7 +129,7 @@ struct ScreenshotGuideSheet: View {
             }
             .navigationTitle("系统截图引导")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("知道了") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("知道了") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
     }

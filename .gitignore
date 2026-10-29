@@ -9,6 +9,14 @@ xcuserdata/
 # 本地生成（CI 也会重新生成）
 test-output.log
 artifact-summary.txt
+build/
+DerivedData/
+build.log
+*.ipa
+*.xcarchive
+
+# XcodeGen 产物（project.yml 才是真相）
+LongShotApp.xcodeproj/
 
 # OS
 .DS_Store
