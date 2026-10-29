@@ -23,7 +23,10 @@ jobs:
 
       - name: Build & Test StitchCore
         working-directory: StitchCore
-        run: swift test 2>&1 | tee ../test-output.log
+        shell: bash
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee ../test-output.log
 
       - name: Summarize
         if: always()

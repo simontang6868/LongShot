@@ -27,7 +27,7 @@ import Foundation
 /// 输出长图，超长（> maxSingleHeight）按 ≤ sliceHeight 自动分片，内存峰值受控。
 /// 分片写出：边画边开新的 CGImageDestination 编码，写完立即释放该片的
 /// CGContext 与 CGImage，绝不把分片 CGImage 攒进数组（见 `Slice.data`）。
-public struct StreamingComposer: CropDrivenStitching {
+public struct StreamingComposer {
 
     public struct Options: Sendable {
         /// 相册混宽时缩放对齐到第一张宽度（系统截图路径应为 false，保持原分辨率）
@@ -148,7 +148,7 @@ public struct StreamingComposer: CropDrivenStitching {
         var widths = [Int](repeating: 0, count: count)
         for i in 0..<count {
             guard let img = inputs[i].cgImage() else { throw ComposeError.failedToDecode(index: i) }
-            let processed = process(img, index: i, count: count, options: options)
+            let processed = process(img, index: i, count: count, options: options, crop: crop)
             widths[i] = processed.width
             heights[i] = processed.height
         }
@@ -198,7 +198,7 @@ public struct StreamingComposer: CropDrivenStitching {
                     var y = 0
                     for (localIdx, imgIndex) in group.enumerated() {
                         guard let img = inputs[imgIndex].cgImage() else { throw ComposeError.failedToDecode(index: imgIndex) }
-                        let processed = process(img, index: imgIndex, count: count, options: options)
+                        let processed = process(img, index: imgIndex, count: count, options: options, crop: crop)
                         let piece = normalize(processed, toWidth: targetWidth, backend: backend)
 
                         if imgIndex == 0 {
@@ -208,7 +208,7 @@ public struct StreamingComposer: CropDrivenStitching {
                             if localIdx == 0, let carried = carry {
                                 let fh = min(options.featherHeight, carried.height, piece.height)
                                 if fh > 0 {
-                                    let carryBottom = crop(carried, rect: CGRect(x: 0, y: carried.height - fh, width: carried.width, height: fh))
+                                    let carryBottom = cropped(carried, to: CGRect(x: 0, y: carried.height - fh, width: carried.width, height: fh))
                                     canvas.draw(carryBottom, at: 0, y: y)
                                 }
                             }
@@ -239,27 +239,34 @@ public struct StreamingComposer: CropDrivenStitching {
     // MARK: - 逐张处理
 
     /// 解码后的一张：依次做 黑边裁切 → 状态栏带裁切 → 重叠量裁切（首/末张单边）。
-    private func process(_ img: CGImage, index: Int, count: Int, options: Options) -> CGImage {
+    private func process(_ img: CGImage, index: Int, count: Int, options: Options, crop: CropParams) -> CGImage {
         var cur = img
         if options.enableEdgeCrop {
             let ins = renderer.horizontalEdgeInsets(for: cur)
             if ins.left > 0 || ins.right > 0 {
-                cur = crop(cur, rect: CGRect(x: ins.left, y: 0,
-                                             width: cur.width - Int(ins.left) - Int(ins.right),
-                                             height: cur.height))
+                let left = Int(ins.left)
+                let right = Int(ins.right)
+                let newW = cur.width - left - right
+                if newW > 0 {
+                    cur = cropped(cur, to: CGRect(x: left, y: 0, width: newW, height: cur.height))
+                }
             }
         }
         if options.enableStatusBarCrop {
             let ins = renderer.statusBarCropInsets(for: cur)
             if ins.top > 0 || ins.bottom > 0 {
-                cur = crop(cur, rect: CGRect(x: 0, y: ins.top,
-                                             width: cur.width,
-                                             height: cur.height - Int(ins.top) - Int(ins.bottom)))
+                let top = Int(ins.top)
+                let bottom = Int(ins.bottom)
+                let newH = cur.height - top - bottom
+                if newH > 0 {
+                    cur = cropped(cur, to: CGRect(x: 0, y: top, width: cur.width, height: newH))
+                }
             }
         }
         let spec = crop.spec(forIndex: index, count: count)
-        let r = spec.retainedRect(forSize: CGSize(width: cur.width, height: cur.height))
-        return crop(cur, rect: r)
+        let size = CGSize(width: CGFloat(cur.width), height: CGFloat(cur.height))
+        let r = spec.retainedRect(forSize: size)
+        return cropped(cur, to: r)
     }
 
     /// 宽度归一化：与 targetWidth 不一致时等比缩放（仅在混宽/相册路径发生）。
@@ -270,7 +277,7 @@ public struct StreamingComposer: CropDrivenStitching {
         return backend.scaled(img, toWidth: targetWidth, height: h)
     }
 
-    private func crop(_ img: CGImage, rect: CGRect) -> CGImage {
+    private func cropped(_ img: CGImage, to rect: CGRect) -> CGImage {
         let x = max(0, Int(rect.origin.x))
         let y = max(0, Int(rect.origin.y))
         let w = min(Int(rect.width), img.width - x)

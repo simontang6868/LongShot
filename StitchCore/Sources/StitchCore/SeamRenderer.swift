@@ -27,7 +27,7 @@ public struct SeamRenderer {
     // MARK: - 接缝羽化（线性 alpha 渐变）
 
     /// 返回「顶部 featherHeight 像素从透明(0)渐变到不透明(1)、其余完全不透明」的蒙版。
-    /// 用 CGImage.masked(by:) 作用在源图上：顶部半透明 → 露出底下上一张图，形成交叉淡化。
+    /// 用 CGImage.masking(_:) 作用在源图上：顶部半透明 → 露出底下上一张图，形成交叉淡化。
     private static func makeTopFeatherMask(width: Int, height: Int, featherHeight: Int) -> CGImage? {
         guard width > 0, height > 0, featherHeight > 0 else { return nil }
         let fh = min(featherHeight, height)
@@ -57,7 +57,7 @@ public struct SeamRenderer {
         let fh = min(max(featherHeight, 0), Self.maxFeatherHeight)
         guard fh > 0,
               let mask = Self.makeTopFeatherMask(width: image.width, height: image.height, featherHeight: fh),
-              let masked = image.masked(by: mask) else {
+              let masked = image.masking(mask) else {
             return image
         }
         return masked
@@ -76,7 +76,8 @@ public struct SeamRenderer {
         ) else { return nil }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
         guard let data = ctx.data else { return nil }
-        return (ctx, data.bindMemory(to: UInt8.self, capacity: w * h), w)
+        let bytes = UnsafePointer<UInt8>(data.bindMemory(to: UInt8.self, capacity: w * h))
+        return (ctx: ctx, bytes: bytes, stride: w)
     }
 
     /// 每行均值（0~1，灰度归一化），长度 = 高度

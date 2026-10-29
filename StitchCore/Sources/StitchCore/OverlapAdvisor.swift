@@ -58,7 +58,7 @@ public struct OverlapAdvisor: Sendable {
         }
 
         // 置信度：最优与最差差异越大，信号越清晰
-        let confidence = worstDiff > 1e-6 ? (worstDiff - bestDiff) / worstDiff : 0
+        let confidence = CGFloat(worstDiff > 1e-6 ? (worstDiff - bestDiff) / worstDiff : 0)
         guard confidence > 0.15 else { return nil }
 
         let inferred = min(CGFloat(bestD) / CGFloat(hp), maxRatio)
@@ -80,7 +80,7 @@ public struct OverlapAdvisor: Sendable {
             diff += abs(sa[i] - sb[i])
         }
         let avg = diff / Double(sa.count)
-        return max(0, min(1, 1 - avg))
+        return CGFloat(max(0, min(1, 1 - avg)))
     }
 
     /// 两张宽度差异比例 0~1（|wa-wb|/max）。> 0.10 触发「宽度不一致」提示（样本 5c）。
